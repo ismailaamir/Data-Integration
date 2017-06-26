@@ -157,6 +157,9 @@
     </build>
 </project>
 
+/**
+ * Handles requests for the application home page.
+ */
 @Controller
 public class HomeController {
 	
@@ -175,21 +178,22 @@ public class HomeController {
 	}
 	 
 	@RequestMapping(value = "/login", method = RequestMethod.GET)
-	public String login(Locale locale, Model model,HttpServletRequest request) {
+	public String login(Locale locale, Model model,HttpServletRequest request,RedirectAttributes  redirectAttributes,BindingResult result) {
 		
-		boolean flag = loginService.execute(request); 
+		
+		
+		LoginResponse reponse  = loginService.execute(request); 
+		
 				
-		if(flag){
-			
+		if(reponse.isValidate()){
+			redirectAttributes.addFlashAttribute("success","Login SucessFul");
 			return "mainPage";
 			
-		}	else{
-			
+		}else{
+			redirectAttributes.addFlashAttribute("error",reponse.getActionMessage().getMessage());
 			return "loginStatus";
 			
 		}	
-		
-		
 	}
 	
 	
@@ -198,57 +202,155 @@ public class HomeController {
 }
 
 
-public class LoginService {
+
+
+
+
+
+
+
+
+
+
+
+
+
+@Service
+public class LoginService{
 	
 	private static final Logger logger = LoggerFactory.getLogger(LoginService.class);
-	@Autowired RRMService mgmtService;
+	@Autowired RLRunMgmtService mgmtService;
 	
-	public boolean execute(HttpServletRequest request){
+	 
+	
+	public LoginResponse execute(HttpServletRequest request){
 		
 		
 		Enumeration enums =  request.getAttributeNames();
+		LoginResponse response = new LoginResponse();
 		
-		while (enums.hasMoreElements()) {
-				String attrName = (String) enums.nextElement();
-				String attrValue = (String) enums.nextElement();
-			    System.out.println(attrName +" = "+ attrValue);
-		}
+		try{
 		
-		HttpSession session  = request.getSession();
-		System.out.println("");
-		
-		if(session != null){
-			Enumeration emmssn  = session.getAttributeNames();
-			while (emmssn.hasMoreElements()) {
-				String  attrName = (String) emmssn.nextElement();
-				String  attrValue = (String) emmssn.nextElement();
-				System.out.println(attrName+" = "+attrValue);
-			 }
-		}else{
-			// error
-		}
-		
-		String user = ESS.getUid(session);
-		if(RollupUtils.isEmpty(user)){
-			// error
-		}else{
-			 UserRole userRole = mgmtService.getUserRole(user);
+				while (enums.hasMoreElements()) {
+						String attrName = (String) enums.nextElement();
+						String attrValue = (String) enums.nextElement();
+					    System.out.println(attrName +" = "+ attrValue);
+				}
+				
+				HttpSession session  = request.getSession();
+				System.out.println("[LoginAction] printing all -session- attributes");
+				
+				if(session != null){
+					Enumeration emmssn  = session.getAttributeNames();
+					while (emmssn.hasMoreElements()) {
+						String  attrName = (String) emmssn.nextElement();
+						String  attrValue = (String) emmssn.nextElement();
+						System.out.println(attrName+" = "+attrValue);
+					 }
+				}else{
+						logger.error("[LoginAction] (Error) No current session found !");
+						response.setValidate(false);
+						response.setGlobalMessage(ActionError.GLOBAL_MESSAGE);
+						response.setActionMessage(new MessageProperties("error.session"));
+				}
+				
+				String user = ESSOUtil.getUid(session);
+				if(RollupUtils.isEmpty(user)){
+					response.setValidate(false);
+					response.setGlobalMessage(ActionError.GLOBAL_MESSAGE);
+					response.setActionMessage(new MessageProperties("error.empty.credential"));
+				}else{
+					 UserRole userRole = mgmtService.getUserRole(user);
+					 
+					 if(userRole != null){
+						 logger.info("Authorized user: "+user+"/"+userRole.getUserAccessRole());
+						 session.setAttribute(UIConstants.KEY_USER, user);
+						 session.setAttribute(UIConstants.KEY_USER_ROLE, userRole.getUserAccessRole());
+						 
+					 }else{
+						    logger.error("Unauthorized user: "+user);
+						    response.setValidate(false);
+							response.setGlobalMessage(ActionError.GLOBAL_MESSAGE);
+							response.setActionMessage(new MessageProperties("error.user.unotherized"));
+					 }
+				}
 			 
-			 if(userRole != null){
-				 logger.info("Authorized user: "+user+"/"+userRole.getUserAccessRole());
-				 session.setAttribute(UIConstants.KEY_USER, user);
-				 session.setAttribute(UIConstants.KEY_USER_ROLE, userRole.getUserAccessRole());
-				 
-			 }else{
-				 logger.error("Unauthorized user: "+user);
-				 //error
-			 }
+				logger.debug("Login Successful");
+				response.setValidate(true);
+		}catch(Exception anyExp){
+			response.setValidate(false);
+			response.setGlobalMessage(ActionError.GLOBAL_MESSAGE);
+			response.setActionMessage(new MessageProperties("error.server.problem"));
 		}
-		
-		
-		return true;  
+		return response;
 	}
 	
 
+}
+
+
+
+
+
+public class LoginResponse {
+
+	private String globalMessage;
+	private MessageProperties actionMessage;
+	private boolean isValidate;
+	public String getGlobalMessage() {
+		return globalMessage;
+	}
+	public void setGlobalMessage(String globalMessage) {
+		this.globalMessage = globalMessage;
+	}
+	public MessageProperties getActionMessage() {
+		return actionMessage;
+	}
+	public void setActionMessage(MessageProperties actionMessage) {
+		this.actionMessage = actionMessage;
+	}
+	public boolean isValidate() {
+		return isValidate;
+	}
+	public void setValidate(boolean isValidate) {
+		this.isValidate = isValidate;
+	}
+	
+	
+	@Override
+	public String toString() {
+		return "LoginResponse [globalMessage=" + globalMessage + ", actionMessage=" + actionMessage + ", isValidate="
+				+ isValidate + "]";
+	}	
+	
+}
+
+
+
+
+public class LoginActionForm {
+	
+	private String user;
+	private String passwd;
+	
+	public String getUser() {
+		return user;
+	}
+	public void setUser(String user) {
+		this.user = user;
+	}
+	
+	public String getPasswd() {
+		return passwd;
+	}
+	public void setPasswd(String passwd) {
+		this.passwd = passwd;
+	}
+	
+	@Override
+	public String toString() {
+		return "LoginActionForm [user=" + user + ", passwd=" + passwd + "]";
+	}
+	
 }
 
