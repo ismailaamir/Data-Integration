@@ -1,9 +1,0 @@
-A web application to demonstrate how live data integration works.
-In this project, the data from three different types of websites is scraped and then displayed as if it is from a unified source.  
-
-
-model.addAttribute("urlSLO", urlSLO);
-
-var urlSLO = '${urlSLO}'
-
- window.location =  urlSLO ;
